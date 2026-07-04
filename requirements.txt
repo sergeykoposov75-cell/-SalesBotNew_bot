@@ -1,0 +1,6 @@
+python-telegram-bot>=21.0,<22
+httpx>=0.25,<1
+requests>=2.31,<3
+python-dotenv>=1.0,<2
+cryptography>=42,<44
+pydantic>=2,<3
