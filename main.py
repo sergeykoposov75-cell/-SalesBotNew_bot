@@ -39,7 +39,6 @@ def main() -> None:
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    try:
     import asyncio
 
     if __name__ == "__main__":
