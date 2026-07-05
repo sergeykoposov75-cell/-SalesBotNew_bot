@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import signal
 import sys
@@ -39,7 +40,10 @@ def main() -> None:
     signal.signal(signal.SIGTERM, shutdown)
 
     try:
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
+    import asyncio
+
+    if __name__ == "__main__":
+    asyncio.run(application.run_polling())(allowed_updates=Update.ALL_TYPES)
     except Exception as e:
         logger.critical("Fatal error during polling: %s", e)
         sys.exit(1)
