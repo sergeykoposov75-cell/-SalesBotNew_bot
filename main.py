@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import threading
+import signal
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 from telegram import Update
@@ -33,19 +34,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет! Я бот отдела продаж. Чем могу помочь?")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Здесь ваша логика обработки сообщений
     await update.message.reply_text("Я получил ваше сообщение и обрабатываю его.")
 
 async def main():
+    """Запуск бота с корректным завершением."""
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    logger.info("Бот запущен и готов к работе!")
-    await app.run_polling()
+
+    # Используем контекстный менеджер для правильного завершения
+    async with app:
+        logger.info("Бот запущен и готов к работе!")
+        await app.start()
+        await app.updater.start_polling()
+        # Ожидаем сигнал остановки (например, Ctrl+C)
+        stop_signal = asyncio.Event()
+        # Настройка обработки сигналов для graceful shutdown
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop_signal.set)
+
+        await stop_signal.wait()
+        logger.info("Получен сигнал остановки, завершаем работу...")
+        await app.updater.stop()
+        await app.stop()
 
 if __name__ == "__main__":
     # Запускаем HTTP-сервер в отдельном потоке
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
-    # Запускаем бота
-    asyncio.run(main())
+    # Запускаем бота с asyncio и обрабатываем ошибки завершения
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Бот остановлен пользователем.")
