@@ -41,11 +41,10 @@ def main() -> None:
 
     import asyncio
 
-    if __name__ == "__main__":
-    asyncio.run(application.run_polling())(allowed_updates=Update.ALL_TYPES)
+    if __name__ == "__main__":    asyncio.run(application.run_polling())
     except Exception as e:
-        logger.critical("Fatal error during polling: %s", e)
-        sys.exit(1)
+    logger.critical("Fatal error during polling: %s", e)
+    sys.exit(1)
 
-if __name__ == "__main__":
+    if __name__ == "__main__":
     main()
