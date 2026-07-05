@@ -42,7 +42,7 @@ def main() -> None:
     import asyncio
 
     if __name__ == "__main__":
-        asyncio.run(main())(application.run_polling())
+        asyncio.run(main())
     logger.critical("Fatal error during polling: %s", e)
     sys.exit(1)
 
