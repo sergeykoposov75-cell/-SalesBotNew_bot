@@ -46,5 +46,4 @@ def main() -> None:
     logger.critical("Fatal error during polling: %s", e)
     sys.exit(1)
 
-    if __name__ == "__main__":
-        main()
+    
