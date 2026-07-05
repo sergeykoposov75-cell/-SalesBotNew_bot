@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import signal
 import sys
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
@@ -12,10 +11,11 @@ from utils import setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-def main() -> None:
+
+async def main() -> None:
     if not config.BOT_TOKEN:
         logger.critical("BOT_TOKEN is not set. Check .env file.")
-        sys.exit(1)
+        return
 
     logger.info(
         "Starting bot... model=%s proxy=%s",
@@ -31,19 +31,23 @@ def main() -> None:
 
     logger.info("Bot started polling. Press Ctrl+C to stop.")
 
-    def shutdown(sig, frame):
-        logger.info("Shutting down...")
-        app.stop()
-        sys.exit(0)
+    try:
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
 
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
+        while True:
+            await asyncio.sleep(3600)
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.critical("Fatal error during polling: %s", e)
+    finally:
+        await app.shutdown()
 
-    import asyncio
 
-    if __name__ == "__main__":
-        asyncio.run(application.run_polling())
-    logger.critical("Fatal error during polling: %s", e)
-    sys.exit(1)
-
-    
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
