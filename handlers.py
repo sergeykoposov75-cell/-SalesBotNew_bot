@@ -29,10 +29,15 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_non_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message:
         return
+    logger.info("Non-text message from %s: type=%s", update.effective_user.id, update.message.effective_attachment)
     await update.message.reply_text(
         "Пожалуйста, отправьте ваш вопрос текстом. "
         "Я пока не умею обрабатывать изображения, стикеры и другие файлы."
     )
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error("Unhandled error: %s", context.error, exc_info=context.error)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:

@@ -1,85 +1,63 @@
 import asyncio
 import logging
 import os
-import signal
-import sys
 import threading
+import signal
 from http.server import HTTPServer, BaseHTTPRequestHandler
-
+from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-import config
-from handlers import start, cancel, handle_message, handle_non_text
-from utils import setup_logging
-
-
+# ===== HTTP-сервер для health check =====
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"OK")
 
-    def log_message(self, format, *args):
-        pass
-
-
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), HealthHandler)
-    logging.getLogger(__name__).info("Health check server running on port %d", port)
+    logging.info(f"Health check server running on port {port}")
     server.serve_forever()
 
+# ===== Telegram-бот =====
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не задан!")
 
-setup_logging()
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет! Я бот отдела продаж. Чем могу помочь?")
 
-async def main() -> None:
-    if not config.BOT_TOKEN:
-        logger.critical("BOT_TOKEN is not set. Check .env file.")
-        return
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Я получил ваше сообщение и обрабатываю его.")
 
-    logger.info(
-        "Starting bot... model=%s proxy=%s",
-        config.MISTRAL_MODEL,
-        bool(config.PROXY_URL),
-    )
-
-    app = Application.builder().token(config.BOT_TOKEN).build()
-
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(MessageHandler(~filters.TEXT, handle_non_text))
 
-    stop_signal = asyncio.Event()
+    logger.info("Бот запущен и готов к работе!")
 
-    if sys.platform != "win32":
-        loop = asyncio.get_running_loop()
-        try:
-            loop.add_signal_handler(signal.SIGINT, stop_signal.set)
-            loop.add_signal_handler(signal.SIGTERM, stop_signal.set)
-        except NotImplementedError:
-            signal.signal(signal.SIGINT, lambda s, f: stop_signal.set())
-            signal.signal(signal.SIGTERM, lambda s, f: stop_signal.set())
-
-    async with app:
-        logger.info("Bot started polling. Press Ctrl+C to stop.")
-        await app.start()
-        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-
-        await stop_signal.wait()
-        logger.info("Shutting down...")
-
-    logger.info("Bot stopped.")
-
+    # Запускаем polling и ждём завершения (остановка по Ctrl+C или SIGTERM)
+    try:
+        await app.run_polling()
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        logger.info("Получен сигнал остановки, завершаем работу...")
+    finally:
+        await app.shutdown()
+        logger.info("Бот остановлен.")
 
 if __name__ == "__main__":
+    # Запускаем HTTP-сервер в отдельном потоке
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
 
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Bot stopped by user.")
+        logger.info("Принудительная остановка.")
