@@ -10,7 +10,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 import config
-from handlers import start, cancel, handle_message
+from handlers import start, cancel, handle_message, handle_non_text
 from utils import setup_logging
 
 
@@ -51,6 +51,7 @@ async def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(~filters.TEXT, handle_non_text))
 
     stop_signal = asyncio.Event()
 
