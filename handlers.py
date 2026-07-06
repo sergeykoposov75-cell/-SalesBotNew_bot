@@ -26,6 +26,14 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "или просто задайте вопрос."
     )
 
+async def handle_non_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
+    await update.message.reply_text(
+        "Пожалуйста, отправьте ваш вопрос текстом. "
+        "Я пока не умею обрабатывать изображения, стикеры и другие файлы."
+    )
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         await update.message.reply_text("Пожалуйста, напишите ваш вопрос текстом.")

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: salesbot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: MISTRAL_MODEL
+        value: mistral-large-latest
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: PROXY_URL
+        value: ""
+      - key: PROXY_USER
+        value: ""
+      - key: PROXY_PASS
+        value: ""
