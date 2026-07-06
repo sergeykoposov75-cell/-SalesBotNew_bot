@@ -1,12 +1,9 @@
-import asyncio
-import logging
 import os
+import logging
 import threading
-import signal
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import telebot
 from dotenv import load_dotenv
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ===== HTTP-сервер для health check =====
 class HealthHandler(BaseHTTPRequestHandler):
@@ -21,7 +18,7 @@ def run_http_server():
     logging.info(f"Health check server running on port {port}")
     server.serve_forever()
 
-# ===== Telegram-бот =====
+# ===== Telegram-бот (синхронный) =====
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -30,53 +27,27 @@ if not BOT_TOKEN:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Я бот отдела продаж. Чем могу помочь?")
+bot = telebot.TeleBot(BOT_TOKEN)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Я получил ваше сообщение и обрабатываю его.")
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, "Привет! Я бот отдела продаж. Чем могу помочь?")
 
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+@bot.message_handler(func=lambda message: True)
+def handle_message(message):
+    bot.reply_to(message, "Я получил ваше сообщение и обрабатываю его.")
 
+def start_bot():
     logger.info("Бот запущен и готов к работе!")
-
-    # Создаём событие для сигнала остановки
-    stop_event = asyncio.Event()
-    loop = asyncio.get_running_loop()
-
-    # Настраиваем обработку сигналов (Ctrl+C, завершение процесса)
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop_event.set)
-
-    # Запускаем polling в фоновой задаче
-    polling_task = asyncio.create_task(app.run_polling())
-
-    # Ждём сигнала остановки
-    await stop_event.wait()
-    logger.info("Получен сигнал остановки, завершаем работу...")
-
-    # Останавливаем бота корректно
-    await app.updater.stop()
-    await app.stop()
-
-    # Отменяем задачу polling и ждём её завершения
-    polling_task.cancel()
-    try:
-        await polling_task
-    except asyncio.CancelledError:
-        pass
-
-    logger.info("Бот остановлен.")
+    bot.infinity_polling()
 
 if __name__ == "__main__":
-    # Запускаем HTTP-сервер в отдельном потоке (для health check)
+    # Запускаем HTTP-сервер в отдельном потоке
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
 
+    # Запускаем бота (синхронно, без asyncio)
     try:
-        asyncio.run(main())
+        start_bot()
     except KeyboardInterrupt:
-        logger.info("Принудительная остановка.")
+        logger.info("Бот остановлен.")
