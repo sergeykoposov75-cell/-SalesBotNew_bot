@@ -43,17 +43,36 @@ async def main():
 
     logger.info("Бот запущен и готов к работе!")
 
-    # Запускаем polling и ждём завершения (остановка по Ctrl+C или SIGTERM)
+    # Создаём событие для сигнала остановки
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    # Настраиваем обработку сигналов (Ctrl+C, завершение процесса)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+
+    # Запускаем polling в фоновой задаче
+    polling_task = asyncio.create_task(app.run_polling())
+
+    # Ждём сигнала остановки
+    await stop_event.wait()
+    logger.info("Получен сигнал остановки, завершаем работу...")
+
+    # Останавливаем бота корректно
+    await app.updater.stop()
+    await app.stop()
+
+    # Отменяем задачу polling и ждём её завершения
+    polling_task.cancel()
     try:
-        await app.run_polling()
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        logger.info("Получен сигнал остановки, завершаем работу...")
-    finally:
-        await app.shutdown()
-        logger.info("Бот остановлен.")
+        await polling_task
+    except asyncio.CancelledError:
+        pass
+
+    logger.info("Бот остановлен.")
 
 if __name__ == "__main__":
-    # Запускаем HTTP-сервер в отдельном потоке
+    # Запускаем HTTP-сервер в отдельном потоке (для health check)
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
 
