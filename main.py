@@ -1,6 +1,7 @@
 import os
 import logging
 import threading
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import telebot
 from dotenv import load_dotenv
@@ -48,6 +49,7 @@ user_data = {}
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    logger.info("CMD /start from user=%s", message.chat.id)
     bot.reply_to(
         message,
         "Я — виртуальный ассистент отдела продаж. Чем могу помочь?\n\n"
@@ -64,6 +66,7 @@ def start(message):
 
 @bot.message_handler(commands=['cancel'])
 def cancel(message):
+    logger.info("CMD /cancel from user=%s", message.chat.id)
     user_data.pop(message.chat.id, None)
     bot.reply_to(message, "Диалог завершён. Если захотите продолжить — напишите /start или просто задайте вопрос.")
 
@@ -71,6 +74,7 @@ def cancel(message):
 def handle_all(message):
     chat_id = message.chat.id
     text = message.text.lower()
+    logger.info("MSG from user=%s text=%s", chat_id, message.text)
 
     # Проверяем, есть ли активный сбор контакта
     if chat_id in user_data:
@@ -124,7 +128,12 @@ def done(message):
 
 def start_bot():
     logger.info("Бот запущен и готов к работе!")
-    bot.infinity_polling()
+    while True:
+        try:
+            bot.infinity_polling(timeout=60, long_polling_timeout=30)
+        except Exception as e:
+            logger.error("Ошибка в polling: %s. Перезапуск через 5 секунд...", e)
+            time.sleep(5)
 
 if __name__ == "__main__":
     http_thread = threading.Thread(target=run_http_server, daemon=True)

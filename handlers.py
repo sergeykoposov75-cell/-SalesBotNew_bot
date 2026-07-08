@@ -16,10 +16,12 @@ WAITING_PHONE = "waiting_phone"
 WAITING_EMAIL = "waiting_email"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info("CMD /start from user=%s", update.effective_user.id)
     context.user_data.clear()
     await update.message.reply_text(KB["intro"])
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info("CMD /cancel from user=%s", update.effective_user.id)
     context.user_data.clear()
     await update.message.reply_text(
         "Диалог завершён. Если захотите продолжить — напишите /start "
@@ -29,7 +31,12 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_non_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message:
         return
-    logger.info("Non-text message from %s: type=%s", update.effective_user.id, update.message.effective_attachment)
+    logger.info(
+        "MSG from user=%s type=non-text attachment=%s state=%s",
+        update.effective_user.id,
+        type(update.message.effective_attachment).__name__,
+        context.user_data.get("state"),
+    )
     await update.message.reply_text(
         "Пожалуйста, отправьте ваш вопрос текстом. "
         "Я пока не умею обрабатывать изображения, стикеры и другие файлы."
@@ -43,6 +50,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not update.message or not update.message.text:
         await update.message.reply_text("Пожалуйста, напишите ваш вопрос текстом.")
         return
+
+    logger.info(
+        "MSG from user=%s text=%s state=%s",
+        update.effective_user.id,
+        mask_pii(update.message.text),
+        context.user_data.get("state"),
+    )
 
     state = context.user_data.get("state")
 
