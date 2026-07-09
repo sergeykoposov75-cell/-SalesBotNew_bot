@@ -28,7 +28,7 @@ if not BOT_TOKEN:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-bot = telebot.TeleBot(BOT_TOKEN)
+bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 
 # ===== База знаний =====
 FAQ = {
