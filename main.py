@@ -188,13 +188,15 @@ def done(message):
     bot.reply_to(message, "Рад был помочь! Если возникнут новые вопросы — я здесь. /start — для начала.")
 
 def start_bot():
+    global bot
     logger.info("Бот запущен и готов к работе!")
     while True:
         try:
             bot.infinity_polling(timeout=60, long_polling_timeout=30)
         except Exception as e:
-            logger.error("Ошибка в polling: %s. Перезапуск через 5 секунд...", e)
-            time.sleep(5)
+            logger.error("Ошибка в polling: %s. Перезапуск через 10 секунд...", e)
+            time.sleep(10)
+            bot = telebot.TeleBot(BOT_TOKEN)
 
 if __name__ == "__main__":
     http_thread = threading.Thread(target=run_http_server, daemon=True)
