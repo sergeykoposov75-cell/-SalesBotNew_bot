@@ -4,6 +4,9 @@ import time
 import telebot
 from dotenv import load_dotenv
 
+# Импортируем нашу базу знаний
+from knowledge_base import KB, search_knowledge_base, classify_intent, INTENT_NAMES
+
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -14,37 +17,13 @@ logger = logging.getLogger(__name__)
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 
-# ========== БАЗА ЗНАНИЙ ==========
-FAQ = {
-    "сколько стоит": "Цены на наши продукты начинаются от 5 000 ₽/мес. Точная стоимость зависит от выбранного тарифа и количества пользователей.",
-    "цена": "Цены на наши продукты начинаются от 5 000 ₽/мес.",
-    "техподдержка": "Техподдержка работает в онлайн-чате в рабочее время (ответ до 2 часов). На тарифах Pro и Enterprise — круглосуточная поддержка 24/7.",
-    "бесплатно": "Да, мы даём 14 дней бесплатного доступа ко всем функциям без ограничений.",
-    "тестовый": "Да, мы даём 14 дней бесплатного доступа.",
-    "интегрировать": "CloudCRM поддерживает интеграцию через REST API и Webhook. Готовые модули для WordPress, Bitrix и Tilda.",
-    "интеграция": "CloudCRM поддерживает интеграцию через REST API и Webhook.",
-    "сравнение": "Сравнение тарифов:\n• CloudCRM: Basic — 5 000 ₽/мес — до 10 пользователей, Pro — 15 000 ₽/мес — до 50 пользователей, Enterprise — индивидуально.\n• AnalyticsPro: Start — 10 000 ₽/мес — до 5 дашбордов, Business — 30 000 ₽/мес.\n• DevOpsStack: Base — 20 000 ₽/мес — до 20 проектов.",
-    "тариф": "Сравнение тарифов: ... (полный список выше).",
-    "консультант": "Хорошо, я передам ваш запрос менеджеру. Напишите, как к вам обращаться? (или /cancel)",
-    "менеджер": "Хорошо, я передам ваш запрос менеджеру. Напишите, как к вам обращаться? (или /cancel)",
-    "помощь": "К сожалению, я не знаю ответа. Давайте я передам ваш вопрос менеджеру. Напишите, как к вам обращаться? (или /cancel)",
-}
-
+# ========== СОСТОЯНИЯ ДЛЯ СБОРА КОНТАКТА ==========
 user_data = {}
 
+# ========== ОБРАБОТЧИКИ КОМАНД ==========
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(
-        message,
-        "Я — виртуальный ассистент отдела продаж. Чем могу помочь?\n\n"
-        "Я отвечаю на вопросы о:\n"
-        "• ценах и тарифах\n"
-        "• техподдержке\n"
-        "• интеграциях\n"
-        "• тестовом периоде\n"
-        "• сравнении тарифов\n\n"
-        "Если хотите связаться с менеджером — напишите об этом."
-    )
+    bot.reply_to(message, KB["intro"])
     logger.info(f"CMD /start from user={message.chat.id}")
 
 @bot.message_handler(commands=['cancel'])
@@ -58,27 +37,28 @@ def done(message):
     bot.reply_to(message, "Рад был помочь! Если появятся вопросы — я здесь.")
     logger.info(f"CMD /done from user={message.chat.id}")
 
+# ========== ОСНОВНАЯ ЛОГИКА ==========
 @bot.message_handler(func=lambda message: True)
 def handle_all(message):
     chat_id = message.chat.id
-    text = message.text.lower()
-    logger.info(f"Сообщение от {chat_id}: {message.text[:100]}")
+    text = message.text
+    logger.info(f"Сообщение от {chat_id}: {text[:100]}")
 
     # Проверяем активный сбор контакта
     if chat_id in user_data:
         state = user_data[chat_id]["state"]
         if state == "waiting_name":
-            user_data[chat_id]["name"] = message.text
+            user_data[chat_id]["name"] = text
             user_data[chat_id]["state"] = "waiting_phone"
             bot.reply_to(message, "Спасибо! Укажите ваш номер телефона (например, +7 999 123-45-67):")
             return
         elif state == "waiting_phone":
-            user_data[chat_id]["phone"] = message.text
+            user_data[chat_id]["phone"] = text
             user_data[chat_id]["state"] = "waiting_email"
             bot.reply_to(message, "Отлично! Укажите ваш email:")
             return
         elif state == "waiting_email":
-            user_data[chat_id]["email"] = message.text
+            user_data[chat_id]["email"] = text
             logger.info(f"Новый клиент: {user_data[chat_id]}")
             bot.reply_to(
                 message,
@@ -88,27 +68,34 @@ def handle_all(message):
             user_data.pop(chat_id, None)
             return
 
-    # Поиск в базе знаний
-    response = None
-    for key, answer in FAQ.items():
-        if key in text:
-            response = answer
-            break
-
-    if response:
+    # Проверяем, есть ли запрос на менеджера (классифицируем как contact)
+    intent = classify_intent(text)
+    if intent == "contact":
         bot.reply_to(
             message,
-            response + "\n\nЕсть ли ещё вопросы? Если хотите связаться с менеджером — напишите об этом или отправьте /done."
+            "Хорошо, я передам ваш запрос менеджеру. Напишите, как к вам обращаться? (или /cancel)"
+        )
+        user_data[chat_id] = {"state": "waiting_name"}
+        return
+
+    # Поиск ответа в базе знаний
+    answer = search_knowledge_base(text)
+    if answer:
+        # Добавляем подсказку о завершении
+        bot.reply_to(
+            message,
+            answer + "\n\nЕсть ли ещё вопросы? Если хотите связаться с менеджером — напишите об этом или отправьте /done."
         )
         return
 
-    # Если не знаем — начинаем сбор контакта
+    # Если ничего не подошло — сбор контакта
     bot.reply_to(
         message,
         "К сожалению, я не знаю точного ответа. Давайте я передам ваш вопрос менеджеру. Напишите, как к вам обращаться? (или /cancel)"
     )
     user_data[chat_id] = {"state": "waiting_name"}
 
+# ========== ЗАПУСК ==========
 def start_bot():
     logger.info("Бот запущен и готов к работе!")
     while True:
